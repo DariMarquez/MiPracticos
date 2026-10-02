@@ -40,14 +40,11 @@ class Alquiler:
 class DialogoConfirmarSalida(wx.Dialog):
     """Ventana modal personalizada para confirmar la salida del sistema."""
     def __init__(self, parent=None):
-        # Aumentamos el tamaño a (380, 150) para evitar que se corte el texto
         super().__init__(parent, title="Confirmar Salida", size=(380, 150))
         self.init_ui()
 
     def init_ui(self):
         panel = wx.Panel(self)
-        
-        # Asignamos un color de fondo gris suave
         panel.SetBackgroundColour(wx.Colour(245, 245, 245))
         
         layout = wx.BoxSizer(wx.VERTICAL)
@@ -57,8 +54,6 @@ class DialogoConfirmarSalida(wx.Dialog):
         font.SetPointSize(10)
         font.SetWeight(wx.FONTWEIGHT_BOLD)
         lbl_mensaje.SetFont(font)
-        
-        # Ajustamos el texto al ancho del panel
         lbl_mensaje.Wrap(340)
 
         layout.Add(lbl_mensaje, 0, wx.ALIGN_CENTER | wx.ALL, 15)
@@ -85,7 +80,6 @@ class DialogoSobreNosotros(wx.Dialog):
         super().__init__(parent, title="Sobre Nosotros", size=(320, 180), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.parent_ref = parent
         self.init_ui()
-        # Capturamos el evento de cierre para limpiar la referencia en la ventana principal
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
     def init_ui(self):
@@ -124,6 +118,7 @@ class DialogoSobreNosotros(wx.Dialog):
         if self.parent_ref and hasattr(self.parent_ref, 'dialogo_sobre'):
             self.parent_ref.dialogo_sobre = None
         event.Skip()
+
 
 class DialogoRegistroAlquileres(wx.Dialog):
     """Ventana modal para visualizar el historial completo de transacciones."""
@@ -386,7 +381,6 @@ class VideoClubWindow(wx.Frame):
         self.tabla_peliculas.InsertColumn(4, "Estado", width=120)
         self.tabla_peliculas.InsertColumn(5, "Historial", width=120)
         
-        # Vinculamos el evento de clic izquierdo del mouse para detectar si se hizo clic específicamente en la columna "Historial" (índice 5)
         self.tabla_peliculas.Bind(wx.EVT_LEFT_DOWN, self.on_tabla_left_down)
 
         layout_principal.Add(self.tabla_peliculas, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
