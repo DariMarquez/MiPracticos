@@ -41,7 +41,6 @@ class VideoClubApp:
         self.peliculas = []
         self.alquileres = []
         self.pelicula_seleccionada_id = None
-        self.fila_seleccionada_tabla = None
 
         self.cargar_datos_ejemplo()
         self.init_ui()
@@ -57,7 +56,7 @@ class VideoClubApp:
 
     def init_ui(self):
         dpg.create_context()
-        dpg.create_viewport(title="Random Play - VideoClub", width=950, height=620)
+        dpg.create_viewport(title="Random Play - VideoClub", width=950, height=640)
 
         # Tema oscuro personalizado estilo PyQt
         with dpg.theme() as global_theme:
@@ -107,9 +106,9 @@ class VideoClubApp:
 
             dpg.add_spacer(height=5)
 
-            # Tabla de inventario
+            # Tabla de inventario (Visualización limpia y estable)
             with dpg.table(tag="tabla_peliculas", header_row=True, borders_innerH=True, borders_outerH=True, 
-                            borders_innerV=True, borders_outerV=True, row_background=True, scrollY=True, height=300):
+                           borders_innerV=True, borders_outerV=True, row_background=True, scrollY=True, height=270):
                 dpg.add_table_column(label="ID", width_fixed=True, init_width_or_weight=40)
                 dpg.add_table_column(label="Título")
                 dpg.add_table_column(label="Género")
@@ -119,11 +118,15 @@ class VideoClubApp:
 
             dpg.add_spacer(height=10)
 
-            # Acciones inferiores
+            # Acciones inferiores y selector de devolución robusto para ejecutables
             with dpg.group(horizontal=True):
                 dpg.add_button(label="Registrar Nuevo Alquiler", callback=self.abrir_dialogo_alquiler)
-                dpg.add_button(label="Devolver Película Seleccionada", callback=self.devolver_pelicula)
                 dpg.add_button(label="Ver Registro de Alquileres", callback=self.abrir_registro_alquileres)
+
+            dpg.add_spacer(height=5)
+            with dpg.group(horizontal=True):
+                dpg.add_combo(tag="combo_devolver_rapido", items=[], width=320)
+                dpg.add_button(label="Devolver Película Seleccionada", callback=self.devolver_pelicula)
 
         # Ventanas emergentes (Modales / Diálogos ocultos inicialmente)
         self.crear_ventanas_emergentes()
@@ -242,9 +245,6 @@ class VideoClubApp:
         self.actualizar_tabla()
         self.mostrar_alerta(f"Película '{titulo}' agregada correctamente.")
 
-    def seleccionar_fila_tabla(self, sender, app_data, user_data):
-        self.fila_seleccionada_tabla = user_data
-
     def actualizar_tabla(self, lista_mostrar=None):
         children = dpg.get_item_children("tabla_peliculas", 1)
         if children:
@@ -254,11 +254,10 @@ class VideoClubApp:
         if lista_mostrar is None:
             lista_mostrar = self.peliculas
 
-        self.fila_seleccionada_tabla = None
         for pelicula in lista_mostrar:
             estado_str = "Disponible" if pelicula.disponible else "Alquilada"
             with dpg.table_row(parent="tabla_peliculas"):
-                dpg.add_selectable(label=str(pelicula.id_pelicula), span_columns=True, callback=self.seleccionar_fila_tabla, user_data=pelicula.id_pelicula)
+                dpg.add_text(str(pelicula.id_pelicula))
                 dpg.add_text(pelicula.titulo)
                 dpg.add_text(pelicula.genero)
                 dpg.add_text(f"${pelicula.precio_alquiler:.2f}")
@@ -269,6 +268,14 @@ class VideoClubApp:
         disponibles = sum(1 for p in self.peliculas if p.disponible)
         alquiladas = total - disponibles
         dpg.set_value("lbl_estadisticas", f"Total: {total} | Disponibles: {disponibles} | Alquiladas: {alquiladas}")
+
+        # Actualizar automáticamente el combo de devolución rápida con las películas alquiladas
+        alquiladas_lista = [f"[{p.id_pelicula}] {p.titulo}" for p in self.peliculas if not p.disponible]
+        dpg.configure_item("combo_devolver_rapido", items=alquiladas_lista)
+        if alquiladas_lista:
+            dpg.set_value("combo_devolver_rapido", alquiladas_lista[0])
+        else:
+            dpg.set_value("combo_devolver_rapido", "")
 
     def filtrar_peliculas(self, sender, app_data):
         texto_busqueda = app_data.lower().strip()
@@ -342,11 +349,20 @@ class VideoClubApp:
         self.mostrar_alerta(f"Alquiler Exitoso!\nCliente: {cliente_nombre}\nPelículas ({len(pelis_seleccionadas)}): {titulos}\nTotal: ${nuevo_alquiler.total_pagado:.2f}")
 
     def devolver_pelicula(self, *args):
-        if self.fila_seleccionada_tabla is None:
-            self.mostrar_alerta("Por favor selecciona una película haciendo clic en su fila en la tabla.")
+        seleccion = dpg.get_value("combo_devolver_rapido")
+        if not seleccion:
+            self.mostrar_alerta("No hay ninguna película alquilada seleccionada para devolver.")
             return
 
-        pelicula = next((p for p in self.peliculas if p.id_pelicula == self.fila_seleccionada_tabla), None)
+        try:
+            # Extraer el ID de la cadena "[ID] Título" de forma limpia
+            id_str = seleccion.split("]")[0].replace("[", "").strip()
+            pelicula_id = int(id_str)
+        except Exception:
+            self.mostrar_alerta("Error al identificar la película seleccionada.")
+            return
+
+        pelicula = next((p for p in self.peliculas if p.id_pelicula == pelicula_id), None)
         if pelicula:
             if pelicula.disponible:
                 self.mostrar_alerta("Esta película ya se encuentra disponible.")
