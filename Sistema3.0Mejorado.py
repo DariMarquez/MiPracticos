@@ -1,0 +1,395 @@
+import dearpygui.dearpygui as dpg
+
+# ==========================================
+# 1. CAPA DE MODELO Y LÓGICA DE DATOS (POO)
+# ==========================================
+
+class Pelicula:
+    """Clase que representa una película en el inventario."""
+    def __init__(self, id_pelicula: int, titulo: str, genero: str, precio_alquiler: float):
+        self.id_pelicula = id_pelicula
+        self.titulo = titulo
+        self.genero = genero
+        self.precio_alquiler = precio_alquiler
+        self.disponible = True
+        self.historial_observaciones = []
+
+
+class Cliente:
+    """Clase que representa a un cliente registrado."""
+    def __init__(self, id_cliente: int, nombre: str, telefono: str = ""):
+        self.id_cliente = id_cliente
+        self.nombre = nombre
+        self.telefono = telefono
+
+
+class Alquiler:
+    """Clase que relaciona a un cliente con una o más películas alquiladas."""
+    def __init__(self, id_alquiler: int, cliente: Cliente, peliculas: list):
+        self.id_alquiler = id_alquiler
+        self.cliente = cliente
+        self.peliculas = peliculas  # Lista de películas alquiladas
+        self.total_pagado = sum(p.precio_alquiler for p in peliculas)
+
+
+# ==========================================
+# 2. SISTEMA PRINCIPAL DE GESTIÓN (DEAR PYGUI)
+# ==========================================
+
+class VideoClubApp:
+    def __init__(self):
+        self.peliculas = []
+        self.alquileres = []
+        self.pelicula_seleccionada_id = None
+
+        self.cargar_datos_ejemplo()
+        self.init_ui()
+
+    def cargar_datos_ejemplo(self):
+        p1 = Pelicula(1, "Matrix", "Ciencia Ficción", 3.50)
+        p1.historial_observaciones.append("Devuelto con un leve rayón en el estuche.")
+        
+        p2 = Pelicula(2, "El Padrino", "Drama", 4.00)
+        p3 = Pelicula(3, "Toy Story", "Animación", 2.50)
+
+        self.peliculas.extend([p1, p2, p3])
+
+    def init_ui(self):
+        dpg.create_context()
+        dpg.create_viewport(title="Random Play - VideoClub", width=950, height=640)
+
+        # Tema oscuro personalizado estilo PyQt
+        with dpg.theme() as global_theme:
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (15, 23, 42), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (30, 41, 59), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Button, (2, 132, 199), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (3, 105, 161), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6)
+                dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8)
+
+        dpg.bind_theme(global_theme)
+
+        # Ventana Principal
+        with dpg.window(tag="PrimaryWindow"):
+            # Header adaptativo con width=-1 para evitar bloqueos al maximizar
+            with dpg.table(header_row=False, width=-1, borders_innerH=False, borders_outerH=False, borders_innerV=False, borders_outerV=False):
+                dpg.add_table_column()  # Columna flexible que ocupa el espacio restante
+                dpg.add_table_column(width_fixed=True, init_width_or_weight=140)  # Columna fija para el botón
+                with dpg.table_row():
+                    dpg.add_text("Random Play - VideoClub", color=(56, 189, 248))
+                    dpg.add_button(label="Sobre Nosotros", width=-1, callback=self.abrir_sobre_nosotros)
+
+            dpg.add_spacer(height=5)
+            dpg.add_text("", tag="lbl_estadisticas", color=(148, 163, 184))
+            dpg.add_separator()
+            dpg.add_spacer(height=5)
+
+            # Formulario para agregar película
+            with dpg.group(horizontal=True):
+                dpg.add_input_text(tag="input_titulo", hint="Título de la película", width=220)
+                dpg.add_combo(
+                    tag="combo_genero",
+                    items=["Acción", "Comedia", "Drama", "Terror", "Infantil", "Ciencia Ficción", "Romance", "Animación"],
+                    default_value="Acción",
+                    width=150
+                )
+                dpg.add_input_text(tag="input_precio", hint="Precio ($)", width=120)
+                dpg.add_button(label="Agregar Película", callback=self.registrar_pelicula)
+
+            dpg.add_spacer(height=5)
+
+            # Buscador
+            with dpg.group(horizontal=True):
+                dpg.add_text("Buscar:")
+                dpg.add_input_text(tag="input_buscar", hint="Filtrar por título...", callback=self.filtrar_peliculas, width=300)
+
+            dpg.add_spacer(height=5)
+
+            # Tabla de inventario (Visualización limpia y estable)
+            with dpg.table(tag="tabla_peliculas", header_row=True, borders_innerH=True, borders_outerH=True, 
+                           borders_innerV=True, borders_outerV=True, row_background=True, scrollY=True, height=270):
+                dpg.add_table_column(label="ID", width_fixed=True, init_width_or_weight=40)
+                dpg.add_table_column(label="Título")
+                dpg.add_table_column(label="Género")
+                dpg.add_table_column(label="Precio")
+                dpg.add_table_column(label="Estado")
+                dpg.add_table_column(label="Acción Historial", width_fixed=True, init_width_or_weight=140)
+
+            dpg.add_spacer(height=10)
+
+            # Acciones inferiores y selector de devolución robusto para ejecutables
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="Registrar Nuevo Alquiler", callback=self.abrir_dialogo_alquiler)
+                dpg.add_button(label="Ver Registro de Alquileres", callback=self.abrir_registro_alquileres)
+
+            dpg.add_spacer(height=5)
+            with dpg.group(horizontal=True):
+                dpg.add_combo(tag="combo_devolver_rapido", items=[], width=320)
+                dpg.add_button(label="Devolver Película Seleccionada", callback=self.devolver_pelicula)
+
+        # Ventanas emergentes (Modales / Diálogos ocultos inicialmente)
+        self.crear_ventanas_emergentes()
+
+        dpg.setup_dearpygui()
+        dpg.show_viewport()
+        dpg.set_primary_window("PrimaryWindow", True)
+        self.actualizar_tabla()
+
+    def crear_ventanas_emergentes(self):
+        # 1. Sobre Nosotros
+        with dpg.window(label="Sobre Nosotros", modal=True, show=False, tag="modal_sobre", width=340, height=200):
+            dpg.add_text("Random Play - VideoClub", color=(56, 189, 248))
+            dpg.add_text("Sistema integral para la gestión de inventario,\nalquileres múltiples y control de observaciones en entregas.", wrap=310)
+            dpg.add_text("Desarrollado por: Dario Marquez", color=(16, 185, 129))
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="Cerrar", callback=lambda: dpg.hide_item("modal_sobre"))
+
+        # 2. Registro Global de Alquileres
+        with dpg.window(label="Registro Global de Alquileres", modal=True, show=False, tag="modal_registro", width=620, height=400):
+            dpg.add_text("Historial de Clientes y Alquileres Realizados", color=(56, 189, 248))
+            with dpg.table(tag="tabla_registro_alquileres", header_row=True, borders_innerH=True, borders_outerH=True, scrollY=True, height=270):
+                dpg.add_table_column(label="ID", width_fixed=True, init_width_or_weight=40)
+                dpg.add_table_column(label="Cliente")
+                dpg.add_table_column(label="Película(s) Alquiladas")
+                dpg.add_table_column(label="Total Pagado", width_fixed=True, init_width_or_weight=90)
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="Cerrar", callback=lambda: dpg.hide_item("modal_registro"))
+
+        # 3. Registrar Nuevo Alquiler
+        with dpg.window(label="Registrar Nuevo Alquiler", modal=True, show=False, tag="modal_alquiler", width=420, height=350):
+            dpg.add_text("Nombre del Cliente:")
+            dpg.add_input_text(tag="input_cliente_nombre", hint="Ej. Juan Pérez")
+            dpg.add_spacer(height=5)
+            dpg.add_text("Seleccionar Películas Disponibles:")
+            with dpg.child_window(tag="container_lista_peliculas_disponibles", height=180, border=True):
+                pass
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="Confirmar y Alquilar", callback=self.confirmar_alquiler)
+
+        # 4. Devolver Película (con reseña u observación)
+        with dpg.window(label="Devolver Película", modal=True, show=False, tag="modal_devolucion", width=400, height=260):
+            dpg.add_text("", tag="lbl_dev_pelicula_titulo")
+            dpg.add_spacer(height=5)
+            dpg.add_text("Reseña u observación de entrega (Opcional):")
+            dpg.add_input_text(tag="txt_observacion_devolucion", multiline=True, height=100)
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="Confirmar Devolución", callback=self.procesar_devolucion)
+
+        # 5. Historial de Observaciones de Película
+        with dpg.window(label="Historial de Película", modal=True, show=False, tag="modal_historial", width=480, height=320):
+            dpg.add_text("", tag="lbl_historial_titulo", color=(56, 189, 248))
+            dpg.add_spacer(height=5)
+            dpg.add_input_text(tag="txt_contenido_historial", multiline=True, readonly=True, height=210, width=-1)
+            dpg.add_spacer(height=5)
+            dpg.add_button(label="Cerrar", callback=lambda: dpg.hide_item("modal_historial"))
+
+        # 6. Advertencias / Alertas emergentes genéricas
+        with dpg.window(label="Atención", modal=True, show=False, tag="modal_alerta", width=300, height=120):
+            dpg.add_text("", tag="lbl_texto_alerta", wrap=280)
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="Aceptar", callback=lambda: dpg.hide_item("modal_alerta"))
+
+    def mostrar_alerta(self, mensaje):
+        dpg.set_value("lbl_texto_alerta", mensaje)
+        dpg.show_item("modal_alerta")
+
+    def abrir_sobre_nosotros(self, *args):
+        dpg.show_item("modal_sobre")
+
+    def abrir_registro_alquileres(self, *args):
+        if not self.alquileres:
+            self.mostrar_alerta("Aún no se han registrado alquileres.")
+            return
+
+        children = dpg.get_item_children("tabla_registro_alquileres", 1)
+        if children:
+            for row in children:
+                dpg.delete_item(row)
+
+        for alq in self.alquileres:
+            with dpg.table_row(parent="tabla_registro_alquileres"):
+                dpg.add_text(str(alq.id_alquiler))
+                dpg.add_text(alq.cliente.nombre)
+                
+                titulos_str = ", ".join([f"{p.titulo} (${p.precio_alquiler:.2f})" for p in alq.peliculas])
+                dpg.add_text(titulos_str)
+                
+                dpg.add_text(f"${alq.total_pagado:.2f}")
+
+        dpg.show_item("modal_registro")
+
+    def registrar_pelicula(self, *args):
+        titulo = dpg.get_value("input_titulo").strip()
+        genero = dpg.get_value("combo_genero")
+        precio_texto = dpg.get_value("input_precio").strip()
+
+        if not titulo or not precio_texto:
+            self.mostrar_alerta("Por favor ingresa el título y el precio.")
+            return
+
+        try:
+            precio = float(precio_texto)
+            if precio <= 0:
+                raise ValueError
+        except ValueError:
+            self.mostrar_alerta("El precio debe ser un número positivo.")
+            return
+
+        nuevo_id = len(self.peliculas) + 1
+        nueva_pelicula = Pelicula(nuevo_id, titulo, genero, precio)
+        self.peliculas.append(nueva_pelicula)
+
+        dpg.set_value("input_titulo", "")
+        dpg.set_value("input_precio", "")
+        self.actualizar_tabla()
+        self.mostrar_alerta(f"Película '{titulo}' agregada correctamente.")
+
+    def actualizar_tabla(self, lista_mostrar=None):
+        children = dpg.get_item_children("tabla_peliculas", 1)
+        if children:
+            for row in children:
+                dpg.delete_item(row)
+
+        if lista_mostrar is None:
+            lista_mostrar = self.peliculas
+
+        for pelicula in lista_mostrar:
+            estado_str = "Disponible" if pelicula.disponible else "Alquilada"
+            with dpg.table_row(parent="tabla_peliculas"):
+                dpg.add_text(str(pelicula.id_pelicula))
+                dpg.add_text(pelicula.titulo)
+                dpg.add_text(pelicula.genero)
+                dpg.add_text(f"${pelicula.precio_alquiler:.2f}")
+                dpg.add_text(estado_str)
+                dpg.add_button(label="Ver Historial", width=-1, user_data=pelicula.id_pelicula, callback=lambda s, a, u: self.mostrar_historial(u))
+
+        total = len(self.peliculas)
+        disponibles = sum(1 for p in self.peliculas if p.disponible)
+        alquiladas = total - disponibles
+        dpg.set_value("lbl_estadisticas", f"Total: {total} | Disponibles: {disponibles} | Alquiladas: {alquiladas}")
+
+        # Actualizar automáticamente el combo de devolución rápida con las películas alquiladas
+        alquiladas_lista = [f"[{p.id_pelicula}] {p.titulo}" for p in self.peliculas if not p.disponible]
+        dpg.configure_item("combo_devolver_rapido", items=alquiladas_lista)
+        if alquiladas_lista:
+            dpg.set_value("combo_devolver_rapido", alquiladas_lista[0])
+        else:
+            dpg.set_value("combo_devolver_rapido", "")
+
+    def filtrar_peliculas(self, sender, app_data):
+        texto_busqueda = app_data.lower().strip()
+        peliculas_filtradas = [
+            p for p in self.peliculas if texto_busqueda in p.titulo.lower()
+        ]
+        self.actualizar_tabla(peliculas_filtradas)
+
+    def mostrar_historial(self, pelicula_id):
+        pelicula = next((p for p in self.peliculas if p.id_pelicula == pelicula_id), None)
+        if not pelicula:
+            return
+
+        dpg.set_value("lbl_historial_titulo", f"Historial y Reseñas de: {pelicula.titulo}")
+        
+        if pelicula.historial_observaciones:
+            contenido = ""
+            for i, obs in enumerate(pelicula.historial_observaciones, 1):
+                contenido += f"Reseña/Entrada #{i}: {obs}\n" + "-"*35 + "\n"
+            dpg.set_value("txt_contenido_historial", contenido)
+        else:
+            dpg.set_value("txt_contenido_historial", "No hay observaciones o reseñas registradas para esta película.")
+
+        dpg.show_item("modal_historial")
+
+    def abrir_dialogo_alquiler(self, *args):
+        dpg.set_value("input_cliente_nombre", "")
+        
+        container = "container_lista_peliculas_disponibles"
+        children = dpg.get_item_children(container, 1)
+        if children:
+            for child in children:
+                dpg.delete_item(child)
+
+        disponibles = [p for p in self.peliculas if p.disponible]
+        if not disponibles:
+            dpg.add_text("No hay películas disponibles en este momento.", parent=container)
+        else:
+            for p in disponibles:
+                dpg.add_checkbox(label=f"[{p.id_pelicula}] {p.titulo} - ${p.precio_alquiler:.2f}", tag=f"chk_peli_{p.id_pelicula}", parent=container)
+
+        dpg.show_item("modal_alquiler")
+
+    def confirmar_alquiler(self, *args):
+        cliente_nombre = dpg.get_value("input_cliente_nombre").strip()
+        if not cliente_nombre:
+            self.mostrar_alerta("Por favor ingresa el nombre del cliente.")
+            return
+
+        pelis_seleccionadas = []
+        for p in self.peliculas:
+            chk_tag = f"chk_peli_{p.id_pelicula}"
+            if dpg.does_item_exist(chk_tag) and dpg.get_value(chk_tag):
+                pelis_seleccionadas.append(p)
+
+        if not pelis_seleccionadas:
+            self.mostrar_alerta("Debes seleccionar al menos una película.")
+            return
+
+        for p in pelis_seleccionadas:
+            p.disponible = False
+
+        nuevo_cliente = Cliente(len(self.alquileres) + 1, cliente_nombre)
+        nuevo_alquiler = Alquiler(len(self.alquileres) + 1, nuevo_cliente, pelis_seleccionadas)
+        self.alquileres.append(nuevo_alquiler)
+
+        dpg.hide_item("modal_alquiler")
+        self.actualizar_tabla()
+        
+        titulos = ", ".join([p.titulo for p in pelis_seleccionadas])
+        self.mostrar_alerta(f"Alquiler Exitoso!\nCliente: {cliente_nombre}\nPelículas ({len(pelis_seleccionadas)}): {titulos}\nTotal: ${nuevo_alquiler.total_pagado:.2f}")
+
+    def devolver_pelicula(self, *args):
+        seleccion = dpg.get_value("combo_devolver_rapido")
+        if not seleccion:
+            self.mostrar_alerta("No hay ninguna película alquilada seleccionada para devolver.")
+            return
+
+        try:
+            # Extraer el ID de la cadena "[ID] Título" de forma limpia
+            id_str = seleccion.split("]")[0].replace("[", "").strip()
+            pelicula_id = int(id_str)
+        except Exception:
+            self.mostrar_alerta("Error al identificar la película seleccionada.")
+            return
+
+        pelicula = next((p for p in self.peliculas if p.id_pelicula == pelicula_id), None)
+        if pelicula:
+            if pelicula.disponible:
+                self.mostrar_alerta("Esta película ya se encuentra disponible.")
+                return
+
+            self.pelicula_seleccionada_id = pelicula.id_pelicula
+            dpg.set_value("lbl_dev_pelicula_titulo", f"Devolución de: {pelicula.titulo}")
+            dpg.set_value("txt_observacion_devolucion", "")
+            dpg.show_item("modal_devolucion")
+
+    def procesar_devolucion(self, *args):
+        pelicula = next((p for p in self.peliculas if p.id_pelicula == self.pelicula_seleccionada_id), None)
+        if pelicula:
+            pelicula.disponible = True  # Marca la película nuevamente como disponible
+            nota = dpg.get_value("txt_observacion_devolucion").strip()
+            if nota:
+                pelicula.historial_observaciones.append(nota)  # Añade la reseña/observación al historial
+
+            dpg.hide_item("modal_devolucion")
+            self.actualizar_tabla()
+            self.mostrar_alerta(f"La película '{pelicula.titulo}' ha sido devuelta y marcada como disponible.")
+
+# ==========================================
+# 3. PUNTO DE ENTRADA DE LA APLICACIÓN
+# ==========================================
+
+if __name__ == "__main__":
+    app = VideoClubApp()
+    dpg.start_dearpygui()
+    dpg.destroy_context()
