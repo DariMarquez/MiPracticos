@@ -15,7 +15,7 @@ class ScientificCalculator(QMainWindow):
     Ofrece funciones matemáticas avanzadas, historial de expresiones y un diseño con estilo QSS.
     """
     APP_NAME = "Calculadora Científica Virtual"
-    APP_VERSION = "1.0.0"
+    APP_VERSION = "1.0.1"
 
     def __init__(self):
         super().__init__()
@@ -282,9 +282,27 @@ class ScientificCalculator(QMainWindow):
             
             parsed_expr = re.sub(r'(\d+)!', parse_factorial, parsed_expr)
 
-            def deg_sin(x): return math.sin(math.radians(x) if self.angle_mode == "DEG" else x)
-            def deg_cos(x): return math.cos(math.radians(x) if self.angle_mode == "DEG" else x)
-            def deg_tan(x): return math.tan(math.radians(x) if self.angle_mode == "DEG" else x)
+            # Corrección de funciones trigonométricas con tolerancia para evitar números largos por imprecisiones flotantes
+            def clean_trig(val):
+                if abs(val) < 1e-12:
+                    return 0.0
+                if abs(val - 1.0) < 1e-12:
+                    return 1.0
+                if abs(val + 1.0) < 1e-12:
+                    return -1.0
+                return val
+
+            def deg_sin(x):
+                val = math.sin(math.radians(x) if self.angle_mode == "DEG" else x)
+                return clean_trig(val)
+
+            def deg_cos(x):
+                val = math.cos(math.radians(x) if self.angle_mode == "DEG" else x)
+                return clean_trig(val)
+
+            def deg_tan(x):
+                val = math.tan(math.radians(x) if self.angle_mode == "DEG" else x)
+                return clean_trig(val)
 
             safe_dict = {
                 'math': math,
